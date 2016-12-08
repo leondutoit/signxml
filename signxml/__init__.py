@@ -119,9 +119,9 @@ class XMLSignatureProcessor(XMLProcessor):
         namespaces.dsig_more + "ecdsa-sha512": SHA512,
         namespaces.dsig11 + "dsa-sha256": SHA256,
     }
-    known_digest_tags = {method.split("#")[1]: method for method in known_digest_methods}
-    known_hmac_digest_tags = {method.split("#")[1]: method for method in known_hmac_digest_methods}
-    known_signature_digest_tags = {method.split("#")[1]: method for method in known_signature_digest_methods}
+    known_digest_tags = dict((method.split("#")[1], method) for method in known_digest_methods)
+    known_hmac_digest_tags = dict((method.split("#")[1], method) for method in known_hmac_digest_methods)
+    known_signature_digest_tags = dict((method.split("#")[1], method) for method in known_signature_digest_methods)
 
     # See https://tools.ietf.org/html/rfc5656
     known_ecdsa_curves = {
@@ -140,14 +140,14 @@ class XMLSignatureProcessor(XMLProcessor):
     }
     known_ecdsa_curve_oids = {ec().name: oid for oid, ec in known_ecdsa_curves.items()}
 
-    known_c14n_algorithms = {
+    known_c14n_algorithms = set([
         "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
         "http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments",
         "http://www.w3.org/2001/10/xml-exc-c14n#",
         "http://www.w3.org/2001/10/xml-exc-c14n#WithComments",
         "http://www.w3.org/2006/12/xml-c14n11",
         "http://www.w3.org/2006/12/xml-c14n11#WithComments"
-    }
+    ])
     default_c14n_algorithm = "http://www.w3.org/2006/12/xml-c14n11"
 
     id_attributes = ("Id", "ID", "id", "xml:id")
@@ -161,14 +161,14 @@ class XMLSignatureProcessor(XMLProcessor):
         if methods is None:
             methods = self.known_digest_methods
         if digest_algorithm_id not in methods:
-            raise InvalidInput('Algorithm "{}" is not recognized'.format(digest_algorithm_id))
+            raise InvalidInput('Algorithm "{0}" is not recognized'.format(digest_algorithm_id))
         return methods[digest_algorithm_id]()
 
     def _get_digest_method_by_tag(self, digest_algorithm_tag, methods=None, known_tags=None):
         if known_tags is None:
             known_tags = self.known_digest_tags
         if digest_algorithm_tag not in known_tags:
-            raise InvalidInput('Algorithm tag "{}" is not recognized'.format(digest_algorithm_tag))
+            raise InvalidInput('Algorithm tag "{0}" is not recognized'.format(digest_algorithm_tag))
         return self._get_digest_method(known_tags[digest_algorithm_tag], methods=methods)
 
     def _get_hmac_digest_method(self, hmac_algorithm_id):
@@ -192,7 +192,7 @@ class XMLSignatureProcessor(XMLProcessor):
             result = element.find(namespace + ":" + query, namespaces=namespaces)
 
         if require and result is None:
-            raise InvalidInput("Expected to find XML element {} in {}".format(query, element.tag))
+            raise InvalidInput("Expected to find XML element {0} in {1}".format(query, element.tag))
         return result
 
     def _findall(self, element, query, namespace="ds", anywhere=False):
@@ -235,16 +235,16 @@ class XMLSignatureProcessor(XMLProcessor):
                 xpath_query = "//*[@*[local-name() = '{}']=$uri]".format(id_attribute)
                 results = doc_root.xpath(xpath_query, uri=uri.lstrip("#"))
                 if len(results) > 1:
-                    raise InvalidInput("Ambiguous reference URI {} resolved to {} nodes".format(uri, len(results)))
+                    raise InvalidInput("Ambiguous reference URI {0} resolved to {1} nodes".format(uri, len(results)))
                 elif len(results) == 1:
                     return results[0]
-            raise InvalidInput("Unable to resolve reference URI: {}".format(uri))
+            raise InvalidInput("Unable to resolve reference URI: {0}".format(uri))
         else:
             if uri_resolver is None:
-                raise InvalidInput("External URI dereferencing is not configured: {}".format(uri))
+                raise InvalidInput("External URI dereferencing is not configured: {0}".format(uri))
             result = uri_resolver(uri)
             if result is None:
-                raise InvalidInput("Unable to resolve reference URI: {}".format(uri))
+                raise InvalidInput("Unable to resolve reference URI: {0}".format(uri))
             return result
 
 class XMLSigner(XMLSignatureProcessor):
@@ -271,7 +271,7 @@ class XMLSigner(XMLSignatureProcessor):
     def __init__(self, method=methods.enveloped, signature_algorithm="rsa-sha256", digest_algorithm="sha256",
                  c14n_algorithm=XMLSignatureProcessor.default_c14n_algorithm):
         if method not in methods:
-            raise InvalidInput("Unknown signature method {}".format(method))
+            raise InvalidInput("Unknown signature method {0}".format(method))
         self.method = method
         self.sign_alg = signature_algorithm
         assert self.sign_alg in self.known_signature_digest_tags or self.sign_alg in self.known_hmac_digest_tags
@@ -732,7 +732,7 @@ class XMLVerifier(XMLSignatureProcessor):
                     lib, func, reason = e.message[0]
                 except Exception:
                     reason = e
-                raise InvalidSignature("Signature verification failed: {}".format(reason))
+                raise InvalidSignature("Signature verification failed: {0}".format(reason))
             # TODO: CN verification goes here
             # TODO: require one of the following to be set: either x509_cert or (ca_pem_file or ca_path) or common_name
             # Use ssl.match_hostname or code from it to perform match
@@ -762,7 +762,7 @@ class XMLVerifier(XMLSignatureProcessor):
             payload = self._resolve_reference(root, reference, uri_resolver=uri_resolver)
             payload_c14n = self._apply_transforms(payload, transforms, signature_ref, c14n_algorithm)
             if digest_value.text != self._get_digest(payload_c14n, self._get_digest_method(digest_algorithm)):
-                raise InvalidDigest("Digest mismatch for reference {}".format(len(verify_results)))
+                raise InvalidDigest("Digest mismatch for reference {0}".format(len(verify_results)))
 
             # We return the signed XML (and only that) to ensure no access to unsigned data happens
             try:
